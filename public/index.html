@@ -135,31 +135,51 @@
                         doc.write(xhr.responseText);
                         doc.close();
 
-                        // Rewrite all links inside iframe to use CORS proxy
-                        const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+                        // Wait for iframe document to be fully parsed
+                        iframe.contentWindow.document.addEventListener('DOMContentLoaded', () => {
+                            const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+                            const baseUrl = url;
 
-                        // Small delay to ensure document is parsed
-                        setTimeout(() => {
-                            const anchors = doc.querySelectorAll('a[href]');
-                            anchors.forEach(a => {
+                            function rewriteHref(el) {
+                                let href = el.getAttribute('href');
+                                if (!href) return;
+                                if (/^(javascript:|mailto:|#)/i.test(href)) return;
                                 try {
-                                    let href = a.getAttribute('href');
+                                    const absolute = new URL(href, baseUrl).href;
+                                    el.setAttribute('href', corsProxy + absolute);
+                                } catch {}
+                            }
 
-                                    // Skip javascript:, mailto:, and fragment-only links
-                                    if (/^(javascript:|mailto:|#)/i.test(href)) return;
+                            function rewriteFormAction(form) {
+                                let action = form.getAttribute('action');
+                                if (!action) return;
+                                try {
+                                    const absolute = new URL(action, baseUrl).href;
+                                    form.setAttribute('action', corsProxy + absolute);
+                                } catch {}
+                            }
 
-                                    // Convert to absolute URL relative to fetched page
-                                    const base = new URL(url);
-                                    const absoluteHref = new URL(href, base).href;
+                            // Rewrite all <a> links
+                            const links = doc.querySelectorAll('a[href]');
+                            links.forEach(rewriteHref);
 
-                                    // Rewrite href to proxy URL
-                                    a.href = corsProxy + absoluteHref;
-                                } catch(e) {
-                                    // Ignore invalid URLs
+                            // Rewrite all form actions
+                            const forms = doc.querySelectorAll('form[action]');
+                            forms.forEach(rewriteFormAction);
+
+                            // Rewrite buttons with onclick that navigate
+                            const buttons = doc.querySelectorAll('button[onclick]');
+                            buttons.forEach(btn => {
+                                let onclick = btn.getAttribute('onclick');
+                                if (onclick && (onclick.includes('location') || onclick.includes('window.location'))) {
+                                    const regex = /(['"])(https?:\/\/[^'"]+)\1/g;
+                                    const newOnclick = onclick.replace(regex, (match, p1, url) => {
+                                        return `'${corsProxy + url}'`;
+                                    });
+                                    btn.setAttribute('onclick', newOnclick);
                                 }
                             });
-                        }, 100);
-
+                        });
                     } else {
                         iframe.contentWindow.document.body.innerHTML = `<p style="color:red;">Failed to load: ${xhr.status}</p>`;
                     }
