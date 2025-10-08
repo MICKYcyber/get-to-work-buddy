@@ -76,14 +76,12 @@
             };
         })();
 
-        // Modified normalizeURL to check if input contains a dot.
-        // If no dot, treat as search query (return DuckDuckGo search URL)
+        // Updated normalizeURL to avoid forcing www
         function normalizeURL(input) {
             let trimmed = input.trim();
 
-            // If no dot in input, treat as search query for DuckDuckGo
+            // If no dot in input, treat as search query
             if (!trimmed.includes('.')) {
-                // encodeURIComponent to safely include search query
                 return 'https://www.bing.com/search?q=' + encodeURIComponent(trimmed);
             }
 
@@ -96,13 +94,7 @@
             }
 
             try {
-                let parsed = new URL(url);
-                let domain = parsed.hostname;
-
-                // Add www. if not present
-                if (!/^www\./i.test(domain)) {
-                    url = parsed.protocol + '//www.' + domain + parsed.pathname + parsed.search + parsed.hash;
-                }
+                new URL(url); // Validate
             } catch (e) {
                 alert("Invalid URL.");
                 throw e;
@@ -128,13 +120,11 @@
                 return;
             }
 
-            // If this is a DuckDuckGo search URL, just load that directly in iframe (no CORS proxy)
             if (url.startsWith('https://duckduckgo.com/?q=')) {
                 iframe.src = url;
                 return;
             }
 
-            // Otherwise fetch and inject proxied content
             const xhr = new XMLHttpRequest();
             xhr.open('GET', url, true);
             xhr.onreadystatechange = function() {
@@ -154,7 +144,6 @@
             };
             xhr.send();
 
-            // Temporary loading message
             iframe.contentWindow.document.body.innerHTML = '<p>Loading...</p>';
         }
 
@@ -174,19 +163,17 @@
                 return;
             }
 
-            // If DuckDuckGo search, just open URL directly
             if (url.startsWith('https://duckduckgo.com/?q=')) {
                 window.open(url, '_blank');
                 return;
             }
 
-            // Open the new window immediately (blank)
             const newWindow = window.open('about:blank', '_blank');
             if (!newWindow) {
                 alert("Popup blocked. Please allow popups for this site.");
                 return;
             }
-            newWindow.opener = null; // Extra safety
+            newWindow.opener = null;
             newWindow.document.write('<p>Loading...</p>');
 
             const xhr = new XMLHttpRequest();
