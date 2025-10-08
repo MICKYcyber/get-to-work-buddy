@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -135,6 +134,32 @@
                         doc.open();
                         doc.write(xhr.responseText);
                         doc.close();
+
+                        // Rewrite all links inside iframe to use CORS proxy
+                        const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+
+                        // Small delay to ensure document is parsed
+                        setTimeout(() => {
+                            const anchors = doc.querySelectorAll('a[href]');
+                            anchors.forEach(a => {
+                                try {
+                                    let href = a.getAttribute('href');
+
+                                    // Skip javascript:, mailto:, and fragment-only links
+                                    if (/^(javascript:|mailto:|#)/i.test(href)) return;
+
+                                    // Convert to absolute URL relative to fetched page
+                                    const base = new URL(url);
+                                    const absoluteHref = new URL(href, base).href;
+
+                                    // Rewrite href to proxy URL
+                                    a.href = corsProxy + absoluteHref;
+                                } catch(e) {
+                                    // Ignore invalid URLs
+                                }
+                            });
+                        }, 100);
+
                     } else {
                         iframe.contentWindow.document.body.innerHTML = `<p style="color:red;">Failed to load: ${xhr.status}</p>`;
                     }
