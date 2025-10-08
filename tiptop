@@ -58,39 +58,17 @@
     <iframe id="previewFrame"></iframe>
 
     <script>
-        // Inject CORS Anywhere Proxy Logic
-        (function() {
-            var cors_api_host = 'cors-anywhere.herokuapp.com';
-            var cors_api_url = 'https://' + cors_api_host + '/';
-            var slice = [].slice;
-            var origin = window.location.protocol + '//' + window.location.host;
-            var open = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function() {
-                var args = slice.call(arguments);
-                var targetOrigin = /^https?:\/\/([^\/]+)/i.exec(args[1]);
-                if (targetOrigin && targetOrigin[0].toLowerCase() !== origin &&
-                    targetOrigin[1] !== cors_api_host) {
-                    args[1] = cors_api_url + args[1];
-                }
-                return open.apply(this, args);
-            };
-        })();
+        const CORS_SH_API_KEY = 'temp_58bd04df4912ca5b32b6cb19dd561c20';
 
-        // Modified normalizeURL to check if input contains a dot.
-        // If no dot, treat as search query (return DuckDuckGo search URL)
         function normalizeURL(input) {
             let trimmed = input.trim();
 
-            // If no dot in input, treat as search query for DuckDuckGo
             if (!trimmed.includes('.')) {
-                // encodeURIComponent to safely include search query
                 return 'https://www.bing.com/search?q=' + encodeURIComponent(trimmed);
             }
 
-            // Otherwise, treat as URL
             let url = trimmed;
 
-            // Add https:// if missing
             if (!/^https?:\/\//i.test(url)) {
                 url = 'https://' + url;
             }
@@ -99,7 +77,6 @@
                 let parsed = new URL(url);
                 let domain = parsed.hostname;
 
-                // Add www. if not present
                 if (!/^www\./i.test(domain)) {
                     url = parsed.protocol + '//www.' + domain + parsed.pathname + parsed.search + parsed.hash;
                 }
@@ -128,16 +105,16 @@
                 return;
             }
 
-            // If this is a DuckDuckGo search URL, just load that directly in iframe (no CORS proxy)
-            if (url.startsWith('https://duckduckgo.com/?q=')) {
+            if (url.startsWith('https://www.bing.com/search')) {
                 iframe.src = url;
                 return;
             }
 
-            // Otherwise fetch and inject proxied content
+            const proxiedURL = `https://api.cors.sh/${url}`;
             const xhr = new XMLHttpRequest();
-            xhr.open('GET', url, true);
-            xhr.onreadystatechange = function() {
+            xhr.open('GET', proxiedURL, true);
+            xhr.setRequestHeader('x-cors-api-key', CORS_SH_API_KEY);
+            xhr.onreadystatechange = function () {
                 if (xhr.readyState === XMLHttpRequest.DONE) {
                     if (xhr.status >= 200 && xhr.status < 300) {
                         const doc = iframe.contentWindow.document;
@@ -149,12 +126,11 @@
                     }
                 }
             };
-            xhr.onerror = function() {
+            xhr.onerror = function () {
                 iframe.contentWindow.document.body.innerHTML = `<p style="color:red;">Request failed.</p>`;
             };
             xhr.send();
 
-            // Temporary loading message
             iframe.contentWindow.document.body.innerHTML = '<p>Loading...</p>';
         }
 
@@ -174,24 +150,24 @@
                 return;
             }
 
-            // If DuckDuckGo search, just open URL directly
-            if (url.startsWith('https://duckduckgo.com/?q=')) {
+            if (url.startsWith('https://www.bing.com/search')) {
                 window.open(url, '_blank');
                 return;
             }
 
-            // Open the new window immediately (blank)
+            const proxiedURL = `https://api.cors.sh/${url}`;
             const newWindow = window.open('about:blank', '_blank');
             if (!newWindow) {
                 alert("Popup blocked. Please allow popups for this site.");
                 return;
             }
-            newWindow.opener = null; // Extra safety
+
             newWindow.document.write('<p>Loading...</p>');
 
             const xhr = new XMLHttpRequest();
-            xhr.open('GET', url, true);
-            xhr.onreadystatechange = function() {
+            xhr.open('GET', proxiedURL, true);
+            xhr.setRequestHeader('x-cors-api-key', CORS_SH_API_KEY);
+            xhr.onreadystatechange = function () {
                 if (xhr.readyState === XMLHttpRequest.DONE) {
                     if (xhr.status >= 200 && xhr.status < 300) {
                         newWindow.document.open();
@@ -202,7 +178,7 @@
                     }
                 }
             };
-            xhr.onerror = function() {
+            xhr.onerror = function () {
                 newWindow.document.body.innerHTML = `<p style="color:red;">Request failed.</p>`;
             };
             xhr.send();
