@@ -84,7 +84,7 @@
             // If no dot in input, treat as search query for DuckDuckGo
             if (!trimmed.includes('.')) {
                 // encodeURIComponent to safely include search query
-                return 'https://duckduckgo.com/?q=' + encodeURIComponent(trimmed);
+                return 'https://www.google.com/search?q=' + encodeURIComponent(trimmed);
             }
 
             // Otherwise, treat as URL
