@@ -45,19 +45,6 @@
             height: calc(100% - 50px);
             border: none;
         }
-
-        /* Hide all except the isolated button */
-        .hidden-except-isolated > *:not(#isolatedBtn) {
-            display: none;
-        }
-        /* Center isolated button */
-        .hidden-except-isolated {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background: #000;
-        }
     </style>
 </head>
 <body>
@@ -66,7 +53,6 @@
         <input type="text" id="urlInput" placeholder="Enter URL (e.g. example.com)" />
         <button onclick="fetchAndInject()">Fetch</button>
         <button onclick="fetchAndOpenNewTab()">Open in New Tab</button>
-        <button id="isolatedBtn" onclick="handleIsolatedClick()">Open Isolated</button>
     </div>
 
     <iframe id="previewFrame"></iframe>
@@ -196,45 +182,6 @@
                 newWindow.document.body.innerHTML = `<p style="color:red;">Request failed.</p>`;
             };
             xhr.send();
-        }
-
-        // New logic for "Open Isolated"
-        let isolatedMode = false;
-        function handleIsolatedClick() {
-            if (!isolatedMode) {
-                // Enter isolated mode: hide everything except the button
-                document.body.classList.add('hidden-except-isolated');
-                isolatedMode = true;
-                const btn = document.getElementById('isolatedBtn');
-                btn.textContent = "Open in New Tab Now";
-            } else {
-                // Open new tab and write page HTML
-                const newWindow = window.open('about:blank', '_blank');
-                if (!newWindow) {
-                    alert("Popup blocked. Please allow popups for this site.");
-                    return;
-                }
-                newWindow.opener = null; // Extra safety
-
-                // Grab the entire HTML content of this page
-                // We want to write a full HTML document to the new window
-
-                // Use cloneNode to avoid mutation while serializing
-                const docClone = document.documentElement.cloneNode(true);
-
-                // Serialize the cloned document
-                const serialized = '<!DOCTYPE html>\n' + docClone.outerHTML;
-
-                newWindow.document.open();
-                newWindow.document.write(serialized);
-                newWindow.document.close();
-
-                // Reset page to normal state
-                document.body.classList.remove('hidden-except-isolated');
-                isolatedMode = false;
-                const btn = document.getElementById('isolatedBtn');
-                btn.textContent = "Open Isolated";
-            }
         }
     </script>
 
