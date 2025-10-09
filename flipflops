@@ -427,46 +427,49 @@
   }
 
   function fetchAndOpenNewTab() {
-      const rawInput = document.getElementById('urlInput').value;
-      if (!rawInput) {
-          alert('Please enter a URL or search term.');
-          return;
-      }
-      let url;
-      try {
-          url = normalizeURL(rawInput);
-      } catch {
-          alert("Invalid URL.");
-          return;
-      }
-
-      if (url.startsWith('https://www.bing.com/search') || url.startsWith('https://duckduckgo.com/?q=')) {
-          window.open(url, '_blank');
-          return;
-      }
-
-      const corsProxy = 'https://cors-anywhere.herokuapp.com/';
-      fetch(corsProxy + url, { headers: { Origin: window.location.origin } })
-        .then(res => {
-          if (!res.ok) throw new Error('Network response was not ok ' + res.status);
-          return res.text();
-        })
-        .then(htmlText => {
-          const proxiedHTML = buildProxiedHtmlString(htmlText, url, corsProxy);
-          const newTab = window.open();
-          if (!newTab) {
-            alert('Popup blocked! Please allow popups for this site.');
-            return;
-          }
-          newTab.document.open();
-          newTab.document.write(proxiedHTML);
-          newTab.document.close();
-        })
-        .catch(err => {
-          alert('Failed to load page: ' + err.message);
-        });
+  const rawInput = document.getElementById('urlInput').value;
+  if (!rawInput) {
+      alert('Please enter a URL or search term.');
+      return;
+  }
+  let url;
+  try {
+      url = normalizeURL(rawInput);
+  } catch {
+      alert("Invalid URL.");
+      return;
   }
 
+  if (url.startsWith('https://www.bing.com/search') || url.startsWith('https://duckduckgo.com/?q=')) {
+      window.open(url, '_blank');
+      return;
+  }
+
+  const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+
+  // Open a blank tab first to avoid popup blockers
+  const newTab = window.open('about:blank', '_blank');
+  if (!newTab) {
+    alert('Popup blocked! Please allow popups for this site.');
+    return;
+  }
+
+  fetch(corsProxy + url, { headers: { Origin: window.location.origin } })
+    .then(res => {
+      if (!res.ok) throw new Error('Network response was not ok ' + res.status);
+      return res.text();
+    })
+    .then(htmlText => {
+      const proxiedHTML = buildProxiedHtmlString(htmlText, url, corsProxy);
+      newTab.document.open();
+      newTab.document.write(proxiedHTML);
+      newTab.document.close();
+    })
+    .catch(err => {
+      alert('Failed to load page: ' + err.message);
+      newTab.close();
+    });
+}
   window.addEventListener('message', event => {
     if (!event.data || event.data.type !== 'proxyLinkClick') return;
     const href = event.data.href;
