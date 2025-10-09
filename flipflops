@@ -12,6 +12,7 @@
   }
 
   .top-bar-wrapper {
+      position: relative; /* positioning context for toggle button */
       width: 100%;
       background-color: transparent;
       padding: 10px;
@@ -68,11 +69,12 @@
       background-color: #555;
   }
 
-  /* Updated toggle button styles to be fixed, visible, and on top */
+  /* Toggle button positioned below dropdown bar */
   .toggle-bar-button {
-      position: fixed;
-      top: 10px;
+      position: absolute;
+      top: 100%; /* just below .top-bar-wrapper */
       right: 10px;
+      margin-top: 5px;
       width: 50px;
       height: 50px;
       border-radius: 50%;
@@ -87,7 +89,7 @@
       align-items: center;
       transition: background-color 0.3s ease;
       user-select: none;
-      z-index: 2147483647; /* max 32-bit int for z-index */
+      z-index: 2147483647;
       box-shadow: 0 0 10px rgba(0,0,0,0.7);
   }
 
@@ -100,6 +102,7 @@
       border: none;
       display: block;
       height: calc(100% - 120px); /* default height when bar is open */
+      transition: height 0.3s ease;
   }
 </style>
 </head>
@@ -114,10 +117,10 @@
         <button onclick="fetchAndOpenNewTab()">Open in New Tab</button>
     </div>
   </div>
-</div>
 
-<!-- Toggle Button FIXED and always visible -->
-<button class="toggle-bar-button" id="toggleBtn" onclick="toggleTopBar()">☰</button>
+  <!-- Toggle Button positioned below bar -->
+  <button class="toggle-bar-button" id="toggleBtn" onclick="toggleTopBar()">×</button>
+</div>
 
 <iframe id="previewFrame"></iframe>
 
@@ -130,14 +133,16 @@
     const isOpen = barContainer.classList.contains('open');
 
     if (isOpen) {
+      // Close the bar
       barContainer.classList.remove('open');
       barContainer.classList.add('closed');
-      toggleBtn.textContent = '×';
+      toggleBtn.textContent = '☰'; // Hamburger icon when closed
       iframe.style.height = '100vh';
     } else {
+      // Open the bar
       barContainer.classList.remove('closed');
       barContainer.classList.add('open');
-      toggleBtn.textContent = '☰';
+      toggleBtn.textContent = '×'; // Close icon when open
       iframe.style.height = 'calc(100% - 120px)';
     }
   }
