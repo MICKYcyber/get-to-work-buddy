@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <title>Proxy HTML Viewer - Inject and Intercept Links</title>
 <style>
+  /* (unchanged CSS from your original) */
   html, body {
       margin: 0;
       padding: 0;
@@ -12,7 +13,7 @@
   }
 
   .top-bar-wrapper {
-      position: relative;
+      position: relative; /* positioning context for toggle button */
       width: 100%;
       background-color: transparent;
       padding: 10px;
@@ -25,7 +26,7 @@
   .top-bar-container {
       overflow: hidden;
       max-height: 200px;
-      transition: max-height 0.28s ease-out, padding 0.28s ease-out, background-color 0.28s ease;
+      transition: max-height 0.3s ease-out, padding 0.3s ease-out, background-color 0.3s ease;
       background-color: #000;
       padding: 10px;
       border-radius: 4px;
@@ -69,9 +70,10 @@
       background-color: #555;
   }
 
+  /* Toggle button positioned below dropdown bar */
   .toggle-bar-button {
       position: absolute;
-      top: 100%;
+      top: 100%; /* just below .top-bar-wrapper */
       right: 10px;
       margin-top: 5px;
       width: 50px;
@@ -100,68 +102,54 @@
       width: 100%;
       border: none;
       display: block;
-      height: calc(100% - 120px);
+      height: calc(100% - 120px); /* default height when bar is open */
       transition: height 0.3s ease;
-  }
-
-  /* simple small-screen adjustment */
-  @media (max-height: 500px) {
-    #previewFrame { height: calc(100% - 90px); }
   }
 </style>
 </head>
 <body>
 
 <div class="top-bar-wrapper">
+  <!-- Dropdown Bar -->
   <div class="top-bar-container open" id="topBarContainer">
     <div class="top-bar">
         <input type="text" id="urlInput" placeholder="Enter URL or search term" />
-        <button id="fetchBtn">Fetch</button>
-        <button id="openTabBtn">Open in New Tab</button>
+        <button onclick="fetchAndInject()">Fetch</button>
+        <button onclick="fetchAndOpenNewTab()">Open in New Tab</button>
     </div>
   </div>
 
-  <button class="toggle-bar-button" id="toggleBtn">×</button>
+  <!-- Toggle Button positioned below bar -->
+  <button class="toggle-bar-button" id="toggleBtn" onclick="toggleTopBar()">×</button>
 </div>
 
-<iframe id="previewFrame" src="about:blank" sandbox="allow-scripts allow-same-origin"></iframe>
+<iframe id="previewFrame"></iframe>
 
 <script>
-  // CONFIG: change to your CORS proxy if needed
-  const corsProxy = 'https://cors-anywhere.herokuapp.com/';
-
   const barContainer = document.getElementById('topBarContainer');
   const toggleBtn = document.getElementById('toggleBtn');
   const iframe = document.getElementById('previewFrame');
-  const fetchBtn = document.getElementById('fetchBtn');
-  const openTabBtn = document.getElementById('openTabBtn');
-  const urlInput = document.getElementById('urlInput');
-
-  toggleBtn.addEventListener('click', toggleTopBar);
-  fetchBtn.addEventListener('click', () => fetchAndInject());
-  openTabBtn.addEventListener('click', () => fetchAndOpenNewTab());
-  window.addEventListener('message', handleIframeMessage, false);
 
   function toggleTopBar() {
     const isOpen = barContainer.classList.contains('open');
 
     if (isOpen) {
+      // Close the bar
       barContainer.classList.remove('open');
       barContainer.classList.add('closed');
-      toggleBtn.textContent = '☰';
+      toggleBtn.textContent = '☰'; // Hamburger icon when closed
       iframe.style.height = '100vh';
     } else {
+      // Open the bar
       barContainer.classList.remove('closed');
       barContainer.classList.add('open');
-      toggleBtn.textContent = '×';
+      toggleBtn.textContent = '×'; // Close icon when open
       iframe.style.height = 'calc(100% - 120px)';
     }
   }
 
   function normalizeURL(input) {
       let trimmed = input.trim();
-      if (!trimmed) throw new Error('Empty input');
-      // If it doesn't look like a domain (no dot) treat as search
       if (!trimmed.includes('.')) {
           return 'https://www.bing.com/search?q=' + encodeURIComponent(trimmed);
       }
@@ -169,220 +157,345 @@
       if (!/^https?:\/\//i.test(url)) {
           url = 'https://' + url;
       }
-      // validate
-      new URL(url);
+      try {
+          new URL(url);
+      } catch(e) {
+          alert("Invalid URL.");
+          throw e;
+      }
       return url;
   }
 
-  // helper script that will be injected into proxied pages.
-  // we build it here and insert the corsProxy string inline so it works inside the iframe
-  function makeHelperScript(proxy) {
-    // Note: keep this string simple; it performs link interception and fetches proxied pages.
-    return `
-      (function() {
-        const corsProxy = ${JSON.stringify(proxy)};
-        function isSkippable(href) {
-          return !href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:');
-        }
+  function fetchAndInject(inputUrl) {
+      let url;
 
-        document.documentElement.addEventListener('click', function(event) {
-          if (event.defaultPrevented) return;
-          if (event.button !== 0) return;
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-
-          let target = event.target;
-          while (target && target !== document.documentElement) {
-            if (target.tagName === 'A' && target.hasAttribute('data-proxied-href')) break;
-            target = target.parentNode;
+      if (inputUrl) {
+          url = inputUrl;
+      } else {
+          const rawInput = document.getElementById('urlInput').value;
+          if (!rawInput) {
+              alert("Please enter a valid URL or search term.");
+              return;
           }
-          if (target && target.tagName === 'A' && target.hasAttribute('data-proxied-href')) {
-            event.preventDefault();
-            const href = target.getAttribute('data-proxied-href');
+          try {
+              url = normalizeURL(rawInput);
+          } catch {
+              iframe.contentWindow.document.body.innerHTML = `<p style="color:red;">Invalid URL format.</p>`;
+              return;
+          }
+      }
 
-            // If user held ctrl/cmd or middle-click we ask parent to open in new tab
-            if (event.metaKey || event.ctrlKey) {
-              window.parent.postMessage({ type: 'proxyLinkClickOpenNewTab', href: href }, '*');
+      if (url.startsWith('https://www.bing.com/search') || url.startsWith('https://duckduckgo.com/?q=')) {
+          iframe.src = url;
+          return;
+      }
+
+      iframe.src = 'about:blank';
+      iframe.contentWindow.document.body.innerHTML = '<p>Loading...</p>';
+
+      const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', corsProxy + url, true);
+      xhr.setRequestHeader('Origin', window.location.origin);
+
+      xhr.onreadystatechange = function() {
+          if (xhr.readyState === XMLHttpRequest.DONE) {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                  const originalUrl = url;
+                  const parser = new DOMParser();
+                  const parsed = parser.parseFromString(xhr.responseText, 'text/html');
+
+                  parsed.querySelectorAll('script, meta[http-equiv=\"refresh\"]').forEach(n => n.remove());
+
+                  let base = parsed.querySelector('base');
+                  if (!base) {
+                      base = parsed.createElement('base');
+                      base.setAttribute('href', originalUrl);
+                      if (parsed.head) {
+                          parsed.head.prepend(base);
+                      } else {
+                          parsed.documentElement.prepend(base);
+                      }
+                  } else {
+                      base.setAttribute('href', originalUrl);
+                  }
+
+                  parsed.querySelectorAll('a').forEach(a => {
+                      const href = a.getAttribute('href');
+                      if (!href) return;
+
+                      if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) {
+                          return;
+                      }
+
+                      let abs;
+                      try {
+                          abs = new URL(href, originalUrl).href;
+                      } catch (e) {
+                          return;
+                      }
+
+                      a.setAttribute('data-proxied-href', abs);
+                      a.setAttribute('href', 'javascript:void(0)');
+                      a.removeAttribute('target');
+                      a.removeAttribute('rel');
+                  });
+
+                  const doc = iframe.contentWindow.document;
+                  doc.open();
+                  doc.write('<!doctype html>\n' + parsed.documentElement.outerHTML);
+                  doc.close();
+
+                  if (iframe._proxyClickHandler) {
+                      try {
+                          doc.documentElement.removeEventListener('click', iframe._proxyClickHandler, true);
+                      } catch {}
+                  }
+
+                  iframe._proxyClickHandler = function(event) {
+                      if (event.defaultPrevented) return;
+                      if (event.button !== 0) return;
+                      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+                      let target = event.target;
+                      const docEl = doc.documentElement;
+
+                      while (target && target !== docEl) {
+                          if (target.tagName === 'A' && target.hasAttribute('data-proxied-href')) break;
+                          target = target.parentNode;
+                      }
+
+                      if (target && target.tagName === 'A' && target.hasAttribute('data-proxied-href')) {
+                          event.preventDefault();
+                          const href = target.getAttribute('data-proxied-href');
+                          fetchAndInject(href);
+                      }
+                  };
+
+                  doc.documentElement.addEventListener('click', iframe._proxyClickHandler, true);
+
+              } else {
+                  iframe.contentWindow.document.body.innerHTML = `<p style=\"color:red;\">Failed to load: ${xhr.status}</p>`;
+              }
+          }
+      };
+
+      xhr.onerror = function() {
+          iframe.contentWindow.document.body.innerHTML = `<p style=\"color:red;\">Request failed.</p>`;
+      };
+
+      xhr.send();
+  }
+
+  // Helper: take raw HTML text and originalUrl and return a proxied HTML string
+  function buildProxiedHtmlString(htmlText, originalUrl, corsProxy) {
+      const parser = new DOMParser();
+      const parsed = parser.parseFromString(htmlText, 'text/html');
+
+      // Remove script tags and meta refresh
+      parsed.querySelectorAll('script, meta[http-equiv=\"refresh\"]').forEach(n => n.remove());
+
+      // Ensure base
+      let base = parsed.querySelector('base');
+      if (!base) {
+          base = parsed.createElement('base');
+          base.setAttribute('href', originalUrl);
+          if (parsed.head) {
+              parsed.head.prepend(base);
+          } else {
+              parsed.documentElement.prepend(base);
+          }
+      } else {
+          base.setAttribute('href', originalUrl);
+      }
+
+      // Rewrite anchors
+      parsed.querySelectorAll('a').forEach(a => {
+          const href = a.getAttribute('href');
+          if (!href) return;
+
+          if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) {
+              return;
+          }
+
+          let abs;
+          try {
+              abs = new URL(href, originalUrl).href;
+          } catch (e) {
+              return;
+          }
+
+          a.setAttribute('data-proxied-href', abs);
+          a.setAttribute('href', 'javascript:void(0)');
+          a.removeAttribute('target');
+          a.removeAttribute('rel');
+      });
+
+      // Inject small helper script into the parsed document so navigation stays proxied in the new tab.
+      const helperScript = parsed.createElement('script');
+      helperScript.textContent = `
+        (function(){
+          const corsProxy = ${JSON.stringify(corsProxy)};
+          function removeScriptsAndRewrite(parsedDoc, originalUrl) {
+            parsedDoc.querySelectorAll('script, meta[http-equiv=\"refresh\"]').forEach(n => n.remove());
+            let base = parsedDoc.querySelector('base');
+            if (!base) {
+              base = parsedDoc.createElement('base');
+              base.setAttribute('href', originalUrl);
+              if (parsedDoc.head) parsedDoc.head.prepend(base);
+              else parsedDoc.documentElement.prepend(base);
             } else {
-              window.parent.postMessage({ type: 'proxyLinkClick', href: href }, '*');
+              base.setAttribute('href', originalUrl);
+            }
+            parsedDoc.querySelectorAll('a').forEach(a => {
+              const href = a.getAttribute('href');
+              if (!href) return;
+              if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) return;
+              let abs;
+              try { abs = new URL(href, originalUrl).href; } catch(e) { return; }
+              a.setAttribute('data-proxied-href', abs);
+              a.setAttribute('href','javascript:void(0)');
+              a.removeAttribute('target');
+              a.removeAttribute('rel');
+            });
+            return parsedDoc;
+          }
+
+          function loadProxiedIntoWindow(targetWindow, url) {
+            try {
+              const xhr = new XMLHttpRequest();
+              xhr.open('GET', corsProxy + url, true);
+              xhr.setRequestHeader('Origin', window.location.origin);
+              xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                  if (xhr.status >= 200 && xhr.status < 300) {
+                    const parser = new DOMParser();
+                    const newDoc = parser.parseFromString(xhr.responseText, 'text/html');
+                    removeScriptsAndRewrite(newDoc, url);
+
+                    // inject this same helper script into the new doc so navigation persists
+                    const script = newDoc.createElement('script');
+                    script.textContent = (${JSON.stringify(helperScript.textContent)});
+
+                    if (newDoc.body) newDoc.body.appendChild(script);
+                    else newDoc.documentElement.appendChild(script);
+
+                    targetWindow.document.open();
+                    targetWindow.document.write('<!doctype html>' + newDoc.documentElement.outerHTML);
+                    targetWindow.document.close();
+                  } else {
+                    targetWindow.document.body.innerHTML = '<p style=\"color:red;\">Failed to load: ' + xhr.status + '</p>';
+                  }
+                }
+              };
+              xhr.onerror = function() {
+                targetWindow.document.body.innerHTML = '<p style=\"color:red;\">Request failed.</p>';
+              };
+              xhr.send();
+            } catch(e) {
+              console.error(e);
             }
           }
-        }, true);
-      })();
-    `;
+
+          // Click handler that will intercept link clicks and proxy them.
+          function clickHandler(event) {
+            if (event.defaultPrevented) return;
+            if (event.button !== 0) return;
+
+            let target = event.target;
+            const docEl = document.documentElement;
+            while (target && target !== docEl) {
+              if (target.tagName === 'A' && target.hasAttribute('data-proxied-href')) break;
+              target = target.parentNode;
+            }
+            if (target && target.tagName === 'A' && target.hasAttribute('data-proxied-href')) {
+              event.preventDefault();
+              const href = target.getAttribute('data-proxied-href');
+              if (event.metaKey || event.ctrlKey) {
+                const w = window.open('about:blank', '_blank');
+                if (!w) {
+                  alert('Popup blocked. Please allow popups for this site.');
+                  return;
+                }
+                loadProxiedIntoWindow(w, href);
+              } else {
+                loadProxiedIntoWindow(window, href);
+              }
+            }
+          }
+
+          // attach as capture to ensure it runs before other handlers
+          document.documentElement.addEventListener('click', clickHandler, true);
+        })();
+      `;
+
+      // append helper script to the parsed document so serialization includes it
+      if (parsed.body) parsed.body.appendChild(helperScript);
+      else parsed.documentElement.appendChild(helperScript);
+
+      // return full serialized document
+      return '<!doctype html>\n' + parsed.documentElement.outerHTML;
   }
 
-  // Build proxied HTML content string: rewrites <a>, injects <base> and helper script
-  function buildProxiedHtmlString(htmlText, originalUrl, proxy) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlText, 'text/html');
+  function fetchAndOpenNewTab() {
+      const rawInput = document.getElementById('urlInput').value;
 
-    // remove script and meta refresh to avoid auto navigation / execution
-    doc.querySelectorAll('script, meta[http-equiv="refresh"]').forEach(n => n.remove());
+      if (!rawInput) {
+          alert("Please enter a valid URL or search term.");
+          return;
+      }
 
-    // ensure base href points to original URL so relative URLs resolve
-    let base = doc.querySelector('base');
-    if (!base) {
-      base = doc.createElement('base');
-      base.setAttribute('href', originalUrl);
-      if (doc.head) doc.head.prepend(base);
-      else doc.documentElement.prepend(base);
-    } else {
-      base.setAttribute('href', originalUrl);
-    }
-
-    // rewrite anchors
-    doc.querySelectorAll('a').forEach(a => {
-      const href = a.getAttribute('href');
-      if (!href) return;
-      if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) return;
-
-      let abs;
+      let url;
       try {
-        abs = new URL(href, originalUrl).href;
-      } catch (e) {
-        return;
+          url = normalizeURL(rawInput);
+      } catch {
+          alert("Invalid URL format.");
+          return;
       }
-      a.setAttribute('data-proxied-href', abs);
-      a.setAttribute('href', 'javascript:void(0)');
-      a.removeAttribute('target');
-      a.removeAttribute('rel');
-    });
 
-    // Inject helper script
-    const scriptEl = doc.createElement('script');
-    scriptEl.textContent = makeHelperScript(proxy);
-    if (doc.body) doc.body.appendChild(scriptEl);
-    else doc.documentElement.appendChild(scriptEl);
-
-    return '<!doctype html>\n' + doc.documentElement.outerHTML;
-  }
-
-  // Load HTML into the iframe (safe because we write about:blank origin)
-  function writeHtmlToIframe(html) {
-    iframe.src = 'about:blank';
-    // Ensure iframe is ready
-    iframe.onload = function() {
-      try {
-        const idoc = iframe.contentWindow.document;
-        idoc.open();
-        idoc.write(html);
-        idoc.close();
-      } catch (e) {
-        console.error('Error writing to iframe:', e);
-      } finally {
-        // remove onload handler to avoid repeated calls
-        iframe.onload = null;
+      if (url.startsWith('https://www.bing.com/search') || url.startsWith('https://duckduckgo.com/?q=')) {
+          window.open(url, '_blank');
+          return;
       }
-    };
-  }
 
-  async function fetchAndInject(inputUrl) {
-    let url;
-    try {
-      if (inputUrl) {
-        url = inputUrl;
-      } else {
-        const raw = urlInput.value;
-        if (!raw) { alert('Please enter a valid URL or search term.'); return; }
-        url = normalizeURL(raw);
+      const newWindow = window.open('about:blank', '_blank');
+      if (!newWindow) {
+          alert("Popup blocked. Please allow popups for this site.");
+          return;
       }
-    } catch (e) {
-      alert('Invalid URL or input.');
-      return;
-    }
+      // do not set opener to null so our injected scripts can run normally within the new window.
+      // newWindow.opener = null; // optional: keep null for security, but not required here
+      newWindow.document.write('<p>Loading...</p>');
 
-    // If search page, just load directly
-    if (url.startsWith('https://www.bing.com/search') || url.startsWith('https://duckduckgo.com/?q=')) {
-      iframe.src = url;
-      return;
-    }
+      const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', corsProxy + url, true);
+      xhr.setRequestHeader('Origin', window.location.origin);
 
-    // Show loading message
-    writeHtmlToIframe('<!doctype html><html><head><meta charset="utf-8"><title>Loading...</title></head><body><p>Loading...</p></body></html>');
+      xhr.onreadystatechange = function() {
+          if (xhr.readyState === XMLHttpRequest.DONE) {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                  try {
+                      const proxiedHtml = buildProxiedHtmlString(xhr.responseText, url, corsProxy);
+                      newWindow.document.open();
+                      newWindow.document.write(proxiedHtml);
+                      newWindow.document.close();
+                  } catch (e) {
+                      newWindow.document.body.innerHTML = `<p style=\"color:red;\">Error processing document.</p>`;
+                      console.error(e);
+                  }
+              } else {
+                  newWindow.document.body.innerHTML = `<p style=\"color:red;\">Failed to load: ${xhr.status}</p>`;
+              }
+          }
+      };
 
-    try {
-      const res = await fetch(corsProxy + url, { headers: { Origin: window.location.origin } });
-      if (!res.ok) throw new Error('Status ' + res.status);
-      const htmlText = await res.text();
-      const proxied = buildProxiedHtmlString(htmlText, url, corsProxy);
-      writeHtmlToIframe(proxied);
-    } catch (err) {
-      writeHtmlToIframe(`<html><body><p style="color:red;">Failed to load: ${err.message}</p></body></html>`);
-      console.error(err);
-    }
+      xhr.onerror = function() {
+          newWindow.document.body.innerHTML = `<p style=\"color:red;\">Request failed.</p>`;
+      };
+
+      xhr.send();
   }
-
-  // Open proxied content in a new tab (keeps new tab alive by writing a placeholder first)
-  async function fetchAndOpenNewTab() {
-    const raw = urlInput.value;
-    if (!raw) { alert('Please enter a URL or search term.'); return; }
-
-    let url;
-    try { url = normalizeURL(raw); } catch (e) { alert('Invalid URL.'); return; }
-
-    if (url.startsWith('https://www.bing.com/search') || url.startsWith('https://duckduckgo.com/?q=')) {
-      window.open(url, '_blank');
-      return;
-    }
-
-    const newTab = window.open('', '_blank');
-    if (!newTab) { alert('Popup blocked! Please allow popups.'); return; }
-
-    newTab.document.write(`<html><head><meta charset="utf-8"><title>Loading...</title></head><body><p>Loading content...</p></body></html>`);
-    newTab.document.close();
-
-    try {
-      const res = await fetch(corsProxy + url, { headers: { Origin: window.location.origin } });
-      if (!res.ok) throw new Error('Status ' + res.status);
-      const htmlText = await res.text();
-      const proxied = buildProxiedHtmlString(htmlText, url, corsProxy);
-      newTab.document.open();
-      newTab.document.write(proxied);
-      newTab.document.close();
-    } catch (err) {
-      newTab.document.body.innerHTML = `<p style="color:red;">Failed to load: ${err.message}</p>`;
-    }
-  }
-
-  // handle messages from iframe helper script
-  function handleIframeMessage(evt) {
-    // Basic origin check skipped because iframe content is same-origin (about:blank) after we write it.
-    const msg = evt.data;
-    if (!msg || !msg.type) return;
-
-    if (msg.type === 'proxyLinkClick' && msg.href) {
-      // load clicked link inside iframe (like navigation)
-      fetchAndInject(msg.href);
-    } else if (msg.type === 'proxyLinkClickOpenNewTab' && msg.href) {
-      // open link in new tab proxied
-      openProxiedInNewTab(msg.href);
-    }
-  }
-
-  // helper to open a proxied URL in a new tab
-  async function openProxiedInNewTab(url) {
-    const newTab = window.open('', '_blank');
-    if (!newTab) { alert('Popup blocked!'); return; }
-    newTab.document.write(`<html><head><meta charset="utf-8"><title>Loading...</title></head><body><p>Loading content...</p></body></html>`);
-    newTab.document.close();
-
-    try {
-      const res = await fetch(corsProxy + url, { headers: { Origin: window.location.origin } });
-      if (!res.ok) throw new Error('Status ' + res.status);
-      const htmlText = await res.text();
-      const proxied = buildProxiedHtmlString(htmlText, url, corsProxy);
-      newTab.document.open();
-      newTab.document.write(proxied);
-      newTab.document.close();
-    } catch (err) {
-      newTab.document.body.innerHTML = `<p style="color:red;">Failed to load: ${err.message}</p>`;
-    }
-  }
-
-  // optional: press Enter in input to fetch
-  urlInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') fetchAndInject();
-  });
 </script>
 
 </body>
