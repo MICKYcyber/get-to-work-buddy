@@ -432,6 +432,7 @@
         alert('Please enter a URL or search term.');
         return;
     }
+
     let url;
     try {
         url = normalizeURL(rawInput);
@@ -446,14 +447,30 @@
     }
 
     const corsProxy = 'https://cors-anywhere.herokuapp.com/';
-    
-    // Open the new tab/window immediately
-    const newTab = window.open('about:blank');
+
+    // Open the new tab with a placeholder document to keep it alive
+    const newTab = window.open('', '_blank');
     if (!newTab) {
         alert('Popup blocked! Please allow popups for this site.');
         return;
     }
 
+    // Write a loading page to keep the tab open
+    newTab.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Loading...</title>
+        <style>body { font-family: sans-serif; padding: 2rem; }</style>
+      </head>
+      <body>
+        <p>Loading content, please wait...</p>
+      </body>
+      </html>
+    `);
+    newTab.document.close(); // Ensure document is in usable state
+
+    // Now perform the fetch and inject
     fetch(corsProxy + url, { headers: { Origin: window.location.origin } })
         .then(res => {
             if (!res.ok) throw new Error('Network response was not ok ' + res.status);
@@ -466,13 +483,9 @@
             newTab.document.close();
         })
         .catch(err => {
-            alert('Failed to load page: ' + err.message);
-            newTab.close();  // Close the blank tab if fetch fails
+            newTab.document.body.innerHTML = `<p style="color:red;">Failed to load page: ${err.message}</p>`;
         });
 }
-
-  // Load default or example page on load if you want
-  // fetchAndInject('https://example.com');
 </script>
 
 </body>
