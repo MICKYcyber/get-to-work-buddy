@@ -282,74 +282,147 @@
   }
 
   function buildProxiedHtmlString(htmlText, originalUrl, corsProxy) {
-      const parser = new DOMParser();
-      const parsed = parser.parseFromString(htmlText, 'text/html');
+    const parser = new DOMParser();
+    const parsed = parser.parseFromString(htmlText, 'text/html');
 
-      parsed.querySelectorAll('script, meta[http-equiv="refresh"]').forEach(n => n.remove());
+    parsed.querySelectorAll('script, meta[http-equiv="refresh"]').forEach(n => n.remove());
 
-      let base = parsed.querySelector('base');
-      if (!base) {
-          base = parsed.createElement('base');
-          base.setAttribute('href', originalUrl);
-          if (parsed.head) {
-              parsed.head.prepend(base);
-          } else {
-              parsed.documentElement.prepend(base);
-          }
-      } else {
-          base.setAttribute('href', originalUrl);
-      }
+    let base = parsed.querySelector('base');
+    if (!base) {
+        base = parsed.createElement('base');
+        base.setAttribute('href', originalUrl);
+        if (parsed.head) {
+            parsed.head.prepend(base);
+        } else {
+            parsed.documentElement.prepend(base);
+        }
+    } else {
+        base.setAttribute('href', originalUrl);
+    }
 
-      parsed.querySelectorAll('a').forEach(a => {
-          const href = a.getAttribute('href');
-          if (!href) return;
+    parsed.querySelectorAll('a').forEach(a => {
+        const href = a.getAttribute('href');
+        if (!href) return;
 
-          if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) {
-              return;
-          }
+        if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) {
+            return;
+        }
 
-          let abs;
-          try {
-              abs = new URL(href, originalUrl).href;
-          } catch (e) {
-              return;
-          }
+        let abs;
+        try {
+            abs = new URL(href, originalUrl).href;
+        } catch (e) {
+            return;
+        }
 
-          a.setAttribute('data-proxied-href', abs);
-          a.setAttribute('href', 'javascript:void(0)');
-          a.removeAttribute('target');
-          a.removeAttribute('rel');
-      });
+        a.setAttribute('data-proxied-href', abs);
+        a.setAttribute('href', 'javascript:void(0)');
+        a.removeAttribute('target');
+        a.removeAttribute('rel');
+    });
 
-      // Inject helper script for link click interception and proxy navigation in new tab
-      const helperScript = `
+    // ✅ Separate script content to avoid self-reference
+    const helperScriptContent = `
         document.documentElement.addEventListener('click', function(event) {
-          if (event.defaultPrevented) return;
-          if (event.button !== 0) return;
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            if (event.defaultPrevented) return;
+            if (event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-          let target = event.target;
-          while (target && target !== document.documentElement) {
-            if (target.tagName === 'A' && target.hasAttribute('data-proxied-href')) break;
-            target = target.parentNode;
-          }
-          if (target && target.tagName === 'A' && target.hasAttribute('data-proxied-href')) {
-            event.preventDefault();
-            const href = target.getAttribute('data-proxied-href');
-
-            if (event.metaKey || event.ctrlKey) {
-              const w = window.open('about:blank', '_blank');
-              if (!w) {
-                alert('Popup blocked. Please allow popups for this site.');
-                return;
-              }
-              loadProxiedIntoWindow(w, href);
-            } else {
-              loadProxiedIntoWindow(window, href);
+            let target = event.target;
+            while (target && target !== document.documentElement) {
+                if (target.tagName === 'A' && target.hasAttribute('data-proxied-href')) break;
+                target = target.parentNode;
             }
-          }
+            if (target && target.tagName === 'A' && target.hasAttribute('data-proxied-href')) {
+                event.preventDefault();
+                const href = target.getAttribute('data-proxied-href');
+
+                if (event.metaKey || event.ctrlKey) {
+                    const w = window.open('about:blank', '_blank');
+                    if (!w) {
+                        alert('Popup blocked. Please allow popups for this site.');
+                        return;
+                    }
+                    loadProxiedIntoWindow(w, href);
+                } else {
+                    loadProxiedIntoWindow(window, href);
+                }
+            }
         }, true);
 
+        function loadProxiedIntoWindow(targetWindow, url) {
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '${corsProxy}' + url, true);
+                xhr.setRequestHeader('Origin', window.location.origin);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === XMLHttpRequest.DONE) {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const parser = new DOMParser();
+                            const newDoc = parser.parseFromString(xhr.responseText, 'text/html');
+
+                            newDoc.querySelectorAll('script, meta[http-equiv="refresh"]').forEach(n => n.remove());
+
+                            let base = newDoc.querySelector('base');
+                            if (!base) {
+                                base = newDoc.createElement('base');
+                                base.setAttribute('href', url);
+                                if (newDoc.head) newDoc.head.prepend(base);
+                                else newDoc.documentElement.prepend(base);
+                            } else {
+                                base.setAttribute('href', url);
+                            }
+
+                            newDoc.querySelectorAll('a').forEach(a => {
+                                const href = a.getAttribute('href');
+                                if (!href) return;
+                                if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) return;
+
+                                let abs;
+                                try { abs = new URL(href, url).href; } catch(e) { return; }
+                                a.setAttribute('data-proxied-href', abs);
+                                a.setAttribute('href', 'javascript:void(0)');
+                                a.removeAttribute('target');
+                                a.removeAttribute('rel');
+                            });
+
+                            const script = newDoc.createElement('script');
+                            script.textContent = \`${helperScriptContent.replace(/`/g, '\\`')}\`;
+                            if (newDoc.body) newDoc.body.appendChild(script);
+                            else newDoc.documentElement.appendChild(script);
+
+                            targetWindow.document.open();
+                            targetWindow.document.write('<!doctype html>' + newDoc.documentElement.outerHTML);
+                            targetWindow.document.close();
+                        } else {
+                            targetWindow.document.body.innerHTML = '<p style="color:red;">Failed to load: ' + xhr.status + '</p>';
+                        }
+                    }
+                };
+                xhr.onerror = function() {
+                    targetWindow.document.body.innerHTML = '<p style="color:red;">Request failed.</p>';
+                };
+                xhr.send();
+            } catch(e) {
+                alert('Error loading page: ' + e.message);
+            }
+        }
+    `;
+
+    // ✅ Inject script element
+    const scriptElem = parsed.createElement('script');
+    scriptElem.textContent = helperScriptContent;
+
+    if (parsed.head) {
+        parsed.head.appendChild(scriptElem);
+    } else if (parsed.body) {
+        parsed.body.appendChild(scriptElem);
+    } else {
+        parsed.documentElement.appendChild(scriptElem);
+    }
+
+    return '<!doctype html>\n' + parsed.documentElement.outerHTML;
+}
         function loadProxiedIntoWindow(targetWindow, url) {
           try {
             const xhr = new XMLHttpRequest();
