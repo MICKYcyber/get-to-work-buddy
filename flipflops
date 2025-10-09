@@ -11,22 +11,19 @@
       font-family: Arial, sans-serif;
   }
 
-  /* Container: vertical flex, right aligned */
   .top-bar-wrapper {
       width: 100%;
-      background-color: transparent; /* no black bar when dropdown closed */
+      background-color: transparent;
       padding: 10px;
       box-sizing: border-box;
-
       display: flex;
       flex-direction: column;
-      align-items: flex-end; /* align children (bar + button) to right */
+      align-items: flex-end;
   }
 
-  /* Dropdown container */
   .top-bar-container {
       overflow: hidden;
-      max-height: 200px; /* visible height */
+      max-height: 200px;
       transition: max-height 0.3s ease-out, padding 0.3s ease-out, background-color 0.3s ease;
       background-color: #000;
       padding: 10px;
@@ -35,12 +32,11 @@
       box-sizing: border-box;
   }
 
-  /* Hide dropdown */
   .top-bar-container.closed {
       max-height: 0;
       padding: 0 10px;
       overflow: hidden;
-      background-color: transparent; /* remove black background */
+      background-color: transparent;
       border-radius: 0;
   }
 
@@ -72,7 +68,6 @@
       background-color: #555;
   }
 
-  /* Toggle Button - below dropdown, aligned bottom right */
   .toggle-bar-button {
       width: 40px;
       height: 40px;
@@ -83,14 +78,12 @@
       font-size: 24px;
       line-height: 1;
       cursor: pointer;
-
       display: flex;
       justify-content: center;
       align-items: center;
       transition: background-color 0.3s ease;
       user-select: none;
-
-      margin-top: 10px; /* spacing from dropdown bar */
+      margin-top: 10px;
   }
 
   .toggle-bar-button:hover {
@@ -99,9 +92,9 @@
 
   #previewFrame {
       width: 100%;
-      height: calc(100% - 120px); /* Adjust for new height of bar + button */
       border: none;
       display: block;
+      height: calc(100% - 120px); /* default height when bar is open */
   }
 </style>
 </head>
@@ -126,24 +119,23 @@
 <script>
   const barContainer = document.getElementById('topBarContainer');
   const toggleBtn = document.getElementById('toggleBtn');
+  const iframe = document.getElementById('previewFrame');
 
   function toggleTopBar() {
     const isOpen = barContainer.classList.contains('open');
 
     if (isOpen) {
-      // Close the dropdown: hide container fully
       barContainer.classList.remove('open');
       barContainer.classList.add('closed');
       toggleBtn.textContent = '×';
+      iframe.style.height = '100vh';
     } else {
-      // Open the dropdown
       barContainer.classList.remove('closed');
       barContainer.classList.add('open');
       toggleBtn.textContent = '☰';
+      iframe.style.height = 'calc(100% - 120px)';
     }
   }
-
-  // Existing functions unchanged:
 
   function normalizeURL(input) {
       let trimmed = input.trim();
@@ -164,7 +156,6 @@
   }
 
   function fetchAndInject(inputUrl) {
-      const iframe = document.getElementById('previewFrame');
       let url;
 
       if (inputUrl) {
@@ -192,7 +183,6 @@
       iframe.contentWindow.document.body.innerHTML = '<p>Loading...</p>';
 
       const corsProxy = 'https://cors-anywhere.herokuapp.com/';
-
       const xhr = new XMLHttpRequest();
       xhr.open('GET', corsProxy + url, true);
       xhr.setRequestHeader('Origin', window.location.origin);
@@ -316,7 +306,6 @@
       newWindow.document.write('<p>Loading...</p>');
 
       const corsProxy = 'https://cors-anywhere.herokuapp.com/';
-
       const xhr = new XMLHttpRequest();
       xhr.open('GET', corsProxy + url, true);
       xhr.setRequestHeader('Origin', window.location.origin);
